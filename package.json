@@ -1,0 +1,13 @@
+{
+  "name": "in-stock-checker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Checks Uniqlo product pages for stock availability and sends a push notification via ntfy.sh when an item comes back in stock.",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "node src/check-stock.mjs"
+  }
+}
