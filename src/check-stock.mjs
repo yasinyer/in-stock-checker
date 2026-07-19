@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { checkCosProduct } from "./check-cos.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -14,6 +15,8 @@ const USER_AGENT =
 // warehouse already shows stock (e.g. a "coming soon" pre-order window).
 const BLOCKING_FLAG_CODES = new Set(["comingSoon"]);
 const AVAILABLE_STATUS_CODES = new Set(["IN_STOCK", "LOW_STOCK"]);
+
+// ── Uniqlo helpers ────────────────────────────────────────────────────────────
 
 function parseProductUrl(rawUrl) {
   const url = new URL(rawUrl);
@@ -74,7 +77,7 @@ function findVariant(result, { colorDisplayCode, sizeDisplayCode, pldDisplayCode
   });
 }
 
-function isAvailable(variant, result) {
+function isUniqloAvailable(variant, result) {
   if (!variant) return false;
 
   const blockingFlag = variant.flags?.productFlags?.find((flag) =>
@@ -88,6 +91,8 @@ function isAvailable(variant, result) {
   return AVAILABLE_STATUS_CODES.has(stock.statusCode) && stock.quantity > 0;
 }
 
+// ── Shared notification helper ────────────────────────────────────────────────
+
 async function notify(topic, { title, message, url }) {
   await fetch(`https://ntfy.sh/${topic}`, {
     method: "POST",
@@ -100,6 +105,8 @@ async function notify(topic, { title, message, url }) {
   });
 }
 
+// ── File helpers ──────────────────────────────────────────────────────────────
+
 async function loadJson(file, fallback) {
   try {
     return JSON.parse(await readFile(file, "utf8"));
@@ -109,37 +116,82 @@ async function loadJson(file, fallback) {
   }
 }
 
+// ── Main ──────────────────────────────────────────────────────────────────────
+
 async function main() {
   const products = await loadJson(PRODUCTS_FILE, []);
   const state = await loadJson(STATE_FILE, {});
 
   for (const product of products) {
-    const key = product.url;
-    try {
-      const params = parseProductUrl(product.url);
-      const result = await fetchL2sAndStocks(params);
-      const variant = findVariant(result, params);
-      const available = isAvailable(variant, result);
-      const wasAvailable = state[key]?.available ?? false;
-
-      console.log(`[${product.label ?? product.url}] available=${available}`);
-
-      if (available && !wasAvailable) {
-        await notify(product.ntfyTopic, {
-          title: "Weer op voorraad!",
-          message: `${product.label ?? "Product"} is weer op voorraad bij Uniqlo.`,
-          url: product.url,
-        });
-        console.log(`  -> notification sent to ntfy.sh/${product.ntfyTopic}`);
-      }
-
-      state[key] = { available, checkedAt: new Date().toISOString() };
-    } catch (error) {
-      console.error(`[${product.label ?? product.url}] check failed:`, error.message);
+    if (product.type === "cos") {
+      await handleCosProduct(product, state);
+    } else {
+      await handleUniqloProduct(product, state);
     }
   }
 
   await writeFile(STATE_FILE, JSON.stringify(state, null, 2) + "\n");
+}
+
+async function handleUniqloProduct(product, state) {
+  const key = product.url;
+  try {
+    const params = parseProductUrl(product.url);
+    const result = await fetchL2sAndStocks(params);
+    const variant = findVariant(result, params);
+    const available = isUniqloAvailable(variant, result);
+    const wasAvailable = state[key]?.available ?? false;
+
+    console.log(`[${product.label ?? product.url}] available=${available}`);
+
+    if (available && !wasAvailable) {
+      await notify(product.ntfyTopic, {
+        title: "Weer op voorraad!",
+        message: `${product.label ?? "Product"} is weer op voorraad bij Uniqlo.`,
+        url: product.url,
+      });
+      console.log(`  -> notification sent to ntfy.sh/${product.ntfyTopic}`);
+    }
+
+    state[key] = { available, checkedAt: new Date().toISOString() };
+  } catch (error) {
+    console.error(`[${product.label ?? product.url}] check failed:`, error.message);
+  }
+}
+
+async function handleCosProduct(product, state) {
+  const key = `cos:${product.label}`;
+  console.log(`[${product.label}] checking ${product.colorVariants.length} color variants…`);
+
+  try {
+    const availableNow = await checkCosProduct(product);
+    const availableNames = availableNow.map((v) => v.name);
+    const prevAvailableNames = state[key]?.availableColors ?? [];
+
+    // Newly in stock = available now but NOT in the previous state.
+    const newlyAvailable = availableNow.filter(
+      (v) => !prevAvailableNames.includes(v.name),
+    );
+
+    if (newlyAvailable.length > 0) {
+      const colorList = newlyAvailable.map((v) => v.name).join(", ");
+      await notify(product.ntfyTopic, {
+        title: "COS – Weer op voorraad!",
+        message:
+          `${product.label} — nu beschikbaar in: ${colorList}. ` +
+          `Maat: ${product.targetSize}.`,
+        url: newlyAvailable[0].url,
+      });
+      console.log(`  -> notification sent for: ${colorList}`);
+    }
+
+    state[key] = {
+      availableColors: availableNames,
+      checkedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error(`[${product.label}] COS check failed:`, error.message);
+  }
 }
 
 main();
