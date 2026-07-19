@@ -56,8 +56,9 @@ async function isSizeAvailable(page, targetSize) {
  * { name, url } for every variant that is currently in stock in that size.
  */
 export async function checkCosProduct(product) {
-  const { colorVariants, targetSize, label } = product;
+  const { colorVariants, targetSize } = product;
   const available = [];
+  let failures = 0;
 
   const browser = await chromium.launch({
     headless: true,
@@ -99,11 +100,19 @@ export async function checkCosProduct(product) {
         console.log(`  [COS] ${variant.name} / ${targetSize} → ${inStock ? "IN STOCK" : "out of stock"}`);
         if (inStock) available.push(variant);
       } catch (err) {
+        failures++;
         console.error(`  [COS] Failed to check ${variant.name}: ${err.message}`);
       }
     }
   } finally {
     await browser.close();
+  }
+
+  // If every variant failed (network problem, bot block, site down) we can't
+  // say anything about availability — throw so the caller keeps the previous
+  // state instead of resetting it (which would cause duplicate notifications).
+  if (failures === colorVariants.length) {
+    throw new Error("all variant checks failed");
   }
 
   return available;
