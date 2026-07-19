@@ -1,7 +1,19 @@
 [
   {
-    "label": "Uniqlo E486982-000 (kleur 09 / maat 003)",
-    "url": "https://www.uniqlo.com/be/nl/products/E486982-000/00?colorDisplayCode=09&sizeDisplayCode=003&pldDisplayCode=020",
-    "ntfyTopic": "instock-checker-yasinyer-99dfaec1b4ac"
+    "type": "cos",
+    "label": "COS Slim Ribbed Cotton Tank Top (maat S, alle kleuren behalve zwart/grijs/wit)",
+    "baseProductUrl": "https://www.cos.com/en-eu/men/menswear/tshirts/slim-fit/product/slim-ribbed-cotton-tank-top-dark-brown-1150895023",
+    "targetSize": "S",
+    "excludeColors": ["Black", "Grey", "White"],
+    "colorVariants": [
+      { "name": "Navy",         "url": "https://www.cos.com/en-eu/men/menswear/tshirts/slim-fit/product/ribbed-tank-top-navy-1150895005" },
+      { "name": "Khaki",        "url": "https://www.cos.com/en-eu/men/menswear/tshirts/slim-fit/product/slim-ribbed-cotton-tank-top-khaki-1150895009" },
+      { "name": "Blue",         "url": "https://www.cos.com/en-eu/men/menswear/tshirts/slim-fit/product/slim-ribbed-cotton-tank-top-blue-1150895010" },
+      { "name": "Light Mole",   "url": "https://www.cos.com/en-eu/men/menswear/tshirts/slim-fit/product/slim-ribbed-cotton-tank-top-light-mole-1150895011" },
+      { "name": "Dark Mole",    "url": "https://www.cos.com/en-eu/men/menswear/tshirts/slim-fit/product/slim-ribbed-cotton-tank-top-dark-mole-1150895012" },
+      { "name": "Beige Mélange","url": "https://www.cos.com/en-eu/men/menswear/tshirts/slim-fit/product/slim-ribbed-cotton-tank-top-beige-mlange-1150895022" },
+      { "name": "Dark Brown",   "url": "https://www.cos.com/en-eu/men/menswear/tshirts/slim-fit/product/slim-ribbed-cotton-tank-top-dark-brown-1150895023" }
+    ],
+    "ntfyTopic": "instock-checker-yasinyer-cb65fea64d4a"
   }
 ]
