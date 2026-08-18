@@ -121,16 +121,25 @@ async function loadJson(file, fallback) {
 async function main() {
   const products = await loadJson(PRODUCTS_FILE, []);
   const state = await loadJson(STATE_FILE, {});
+  let failed = 0;
 
   for (const product of products) {
-    if (product.type === "cos") {
-      await handleCosProduct(product, state);
-    } else {
-      await handleUniqloProduct(product, state);
-    }
+    const ok =
+      product.type === "cos"
+        ? await handleCosProduct(product, state)
+        : await handleUniqloProduct(product, state);
+    if (!ok) failed++;
   }
 
   await writeFile(STATE_FILE, JSON.stringify(state, null, 2) + "\n");
+
+  // Exit non-zero so a broken checker shows up as a failed Actions run.
+  // Silently "succeeding" while checking nothing means a restock would pass
+  // by unnoticed.
+  if (failed > 0) {
+    console.error(`${failed} of ${products.length} product checks failed`);
+    process.exitCode = 1;
+  }
 }
 
 async function handleUniqloProduct(product, state) {
@@ -154,8 +163,10 @@ async function handleUniqloProduct(product, state) {
     }
 
     state[key] = { available, checkedAt: new Date().toISOString() };
+    return true;
   } catch (error) {
     console.error(`[${product.label ?? product.url}] check failed:`, error.message);
+    return false;
   }
 }
 
@@ -189,8 +200,10 @@ async function handleCosProduct(product, state) {
       availableColors: availableNames,
       checkedAt: new Date().toISOString(),
     };
+    return true;
   } catch (error) {
     console.error(`[${product.label}] COS check failed:`, error.message);
+    return false;
   }
 }
 

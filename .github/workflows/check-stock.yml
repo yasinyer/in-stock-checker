@@ -1,8 +1,10 @@
 name: Check stock
 
 on:
+  # Once a day at 07:00 UTC (09:00 CEST). Running more often is not worth the
+  # Actions minutes on a private repo — see README.
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "0 7 * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -15,6 +17,9 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Backstop so a hung step can never burn hours of Actions quota.
+    # A healthy run finishes in ~2 minutes.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -25,13 +30,20 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # No --with-deps: the ubuntu-latest runner already ships the system
+      # libraries Chromium needs, and the apt-get step it triggers has hung
+      # for hours in the past.
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Run stock check
+        timeout-minutes: 5
         run: npm run check
 
+      # Runs even when the check step failed, so state for the products that
+      # did succeed is still recorded.
       - name: Commit updated state
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

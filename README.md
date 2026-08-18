@@ -22,8 +22,9 @@ is back in stock.
 - `state.json` remembers the availability from the last check, so a
   notification is only sent on the transition unavailable -> available
   (not on every run).
-- `.github/workflows/check-stock.yml` runs the check every 15 minutes via
-  GitHub Actions and commits the updated `state.json` back to the repo.
+- `.github/workflows/check-stock.yml` runs the check once a day (07:00 UTC)
+  via GitHub Actions and commits the updated `state.json` back to the repo.
+  You can also trigger it on demand from the Actions tab.
 
 ## Currently watched
 
@@ -69,3 +70,24 @@ GitHub only runs the `schedule` trigger for workflows that live on the
 repository's default branch. Changes take effect once merged into `main`;
 you can also trigger a run manually from the Actions tab
 (`workflow_dispatch`).
+
+## Actions minutes budget
+
+This repository is private, so Actions minutes are metered (2000/month on
+the free plan). A healthy run takes about 2 minutes, so the daily schedule
+costs roughly 60 minutes a month — comfortably inside the quota.
+
+Two safeguards keep it that way, and both matter:
+
+- `timeout-minutes` on the job and on the check step. Without it a single
+  hung step runs until GitHub's 6-hour ceiling; that happened twice on
+  2026-08-17/18 and burned ~720 minutes in one night.
+- `npx playwright install chromium` **without** `--with-deps`. The
+  `--with-deps` flag triggers an `apt-get` install on the runner, which is
+  what hung on those two occasions. The `ubuntu-latest` image already has
+  the libraries Chromium needs.
+
+If the quota does run out, jobs fail after 2-3 seconds without ever being
+assigned a runner (no steps, no logs). That is a billing symptom, not a bug
+in the checker. Check Settings -> Billing -> Actions, and note the quota
+resets on the first of the month.
