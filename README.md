@@ -6,8 +6,8 @@ is back in stock.
 
 ## How it works
 
-- `products.json` lists the products to watch, each with an `ntfyTopic` to
-  publish a notification to.
+- `products.json` lists the products to watch. It deliberately contains no
+  ntfy topic — see [Notification topic](#notification-topic) below.
 - `src/check-stock.mjs` is the entrypoint that runs all checks:
   - **Uniqlo** entries (no `type` field) are checked via Uniqlo's internal
     commerce API for the product/color/size combination encoded in the URL's
@@ -30,16 +30,31 @@ is back in stock.
 
 - **COS Slim Ribbed Cotton Tank Top** — size S, in any color except
   black/grey/white (Navy, Khaki, Blue, Light Mole, Dark Mole, Beige Mélange,
-  Dark Brown). Topic: `instock-checker-yasinyer-cb65fea64d4a`.
+  Dark Brown).
 
-## Get notified
+## Notification topic
 
-1. Install the [ntfy app](https://ntfy.sh/) (iOS/Android) or open
-   `https://ntfy.sh/<topic>` in a browser.
-2. Subscribe to the topic configured for your product in `products.json`.
-3. That's it — no account or credentials needed. Anyone who knows the topic
-   name can publish/subscribe to it, so it's not a private channel, but the
-   random suffix makes it hard to guess.
+This repository is public, so the ntfy topic is **not** stored here. An ntfy
+topic is a shared secret: anyone who knows the name can both read your
+notifications and publish fake ones to you.
+
+The topic comes from the `NTFY_TOPIC` environment variable:
+
+- **In CI** it is supplied by the repository secret of the same name
+  (Settings -> Secrets and variables -> Actions).
+- **Locally**, export it before running:
+  `NTFY_TOPIC=your-topic npm run check`
+
+`check-stock.mjs` verifies the variable is set before doing any work, so a
+missing secret fails the run immediately instead of at the moment a restock
+is found. The topic is never printed to the logs.
+
+To receive notifications, install the [ntfy app](https://ntfy.sh/)
+(iOS/Android) or open `https://ntfy.sh/<topic>` in a browser, and subscribe
+to that same topic. No account needed.
+
+If a topic ever leaks, rotate it: pick a new random name, update the secret,
+and resubscribe in the app. The old topic can simply be abandoned.
 
 ## Add another product to watch
 
@@ -48,20 +63,22 @@ Add an entry to `products.json`. For Uniqlo:
 ```json
 {
   "label": "Readable name for notifications",
-  "url": "https://www.uniqlo.com/<region>/<locale>/products/<id>/<priceGroup>?colorDisplayCode=..&sizeDisplayCode=..",
-  "ntfyTopic": "pick-your-own-random-topic-name"
+  "url": "https://www.uniqlo.com/<region>/<locale>/products/<id>/<priceGroup>?colorDisplayCode=..&sizeDisplayCode=.."
 }
 ```
 
 For COS, use `"type": "cos"` with a `targetSize` and a `colorVariants` list
 (see the existing entry in `products.json` as a template).
 
+All products share the `NTFY_TOPIC` topic. To send one product elsewhere,
+give it an `"ntfyTopicEnv": "SOME_OTHER_VAR"` field and add that secret too.
+
 ## Run locally
 
 ```bash
 npm install
 npx playwright install --with-deps chromium
-npm run check
+NTFY_TOPIC=your-topic npm run check
 ```
 
 ## Note on GitHub Actions schedules
@@ -71,13 +88,15 @@ repository's default branch. Changes take effect once merged into `main`;
 you can also trigger a run manually from the Actions tab
 (`workflow_dispatch`).
 
-## Actions minutes budget
+## Actions minutes
 
-This repository is private, so Actions minutes are metered (2000/month on
-the free plan). A healthy run takes about 2 minutes, so the daily schedule
-costs roughly 60 minutes a month — comfortably inside the quota.
+This repository is public, so Actions minutes are free and unmetered. It was
+private until 2026-08-18, when the metered quota ran out and every scheduled
+run started failing after 2-3 seconds without ever being assigned a runner
+(no steps, no downloadable logs — a billing symptom, not a bug in the
+checker).
 
-Two safeguards keep it that way, and both matter:
+Two safeguards from that incident are worth keeping regardless of billing:
 
 - `timeout-minutes` on the job and on the check step. Without it a single
   hung step runs until GitHub's 6-hour ceiling; that happened twice on
@@ -86,8 +105,3 @@ Two safeguards keep it that way, and both matter:
   `--with-deps` flag triggers an `apt-get` install on the runner, which is
   what hung on those two occasions. The `ubuntu-latest` image already has
   the libraries Chromium needs.
-
-If the quota does run out, jobs fail after 2-3 seconds without ever being
-assigned a runner (no steps, no logs). That is a billing symptom, not a bug
-in the checker. Check Settings -> Billing -> Actions, and note the quota
-resets on the first of the month.
