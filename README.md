@@ -56,6 +56,20 @@ to that same topic. No account needed.
 If a topic ever leaks, rotate it: pick a new random name, update the secret,
 and resubscribe in the app. The old topic can simply be abandoned.
 
+### Verifying the chain
+
+The secret cannot be read back, so the only way to confirm it holds the topic
+you are actually subscribed to is to send through it. In the Actions tab, run
+**Check stock** with **"Send a test notification instead of checking stock"**
+ticked. It publishes one notification per configured topic using the secret
+and skips the stock check entirely, so it finishes in seconds.
+
+Locally the same thing:
+
+```bash
+NTFY_TOPIC=your-topic npm run check -- --test-notification
+```
+
 ## Add another product to watch
 
 Add an entry to `products.json`. For Uniqlo:
