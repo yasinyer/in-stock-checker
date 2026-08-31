@@ -115,14 +115,20 @@ function resolveTopic(product) {
 }
 
 async function notify(topic, { title, message, url }) {
-  const response = await fetch(`https://ntfy.sh/${topic}`, {
+  // Publish via ntfy's JSON format rather than its X-Title/X-Click headers.
+  // HTTP header values are ByteStrings, so any character above U+00FF throws
+  // before the request is even sent — an en dash in a title was enough to
+  // break the notification. JSON carries the fields as UTF-8 instead.
+  const response = await fetch("https://ntfy.sh", {
     method: "POST",
-    headers: {
-      Title: title,
-      Tags: "package,bell",
-      Click: url,
-    },
-    body: message,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      topic,
+      title,
+      message,
+      tags: ["package", "bell"],
+      click: url,
+    }),
   });
 
   // A dropped notification is the one failure that must never pass quietly:
@@ -143,9 +149,42 @@ async function loadJson(file, fallback) {
   }
 }
 
+// ── Test mode ─────────────────────────────────────────────────────────────────
+
+/**
+ * Sends one notification per configured topic and checks nothing.
+ *
+ * This proves the whole chain in one run — the NTFY_TOPIC secret, ntfy.sh,
+ * and the subscription on your phone — without waiting for a real restock.
+ * Reading the secret back is impossible, so this is the only way to confirm
+ * it holds the topic you are actually subscribed to.
+ */
+async function sendTestNotifications(products) {
+  if (products.length === 0) {
+    throw new Error("no products configured — nothing to send a test to");
+  }
+
+  // Several products may share one topic; only send once per topic.
+  const topics = new Set(products.map(resolveTopic));
+
+  for (const topic of topics) {
+    await notify(topic, {
+      title: "Test — in-stock-checker",
+      message:
+        "Deze testmelding komt uit de GitHub Action en gebruikt het " +
+        "NTFY_TOPIC secret. Zie je dit, dan werkt de hele keten.",
+      url: "https://github.com/yasinyer/in-stock-checker/actions",
+    });
+    console.log("  -> test notification sent");
+  }
+
+  console.log(`Sent ${topics.size} test notification(s).`);
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
+  const testMode = process.argv.includes("--test-notification");
   const products = await loadJson(PRODUCTS_FILE, []);
   const state = await loadJson(STATE_FILE, {});
   let failed = 0;
@@ -154,6 +193,11 @@ async function main() {
   // the moment a restock is found — exactly when the notification matters.
   for (const product of products) {
     resolveTopic(product);
+  }
+
+  if (testMode) {
+    await sendTestNotifications(products);
+    return;
   }
 
   for (const product of products) {

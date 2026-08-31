@@ -1,11 +1,15 @@
 name: Check stock
 
 on:
-  # Once a day at 07:00 UTC (09:00 CEST). Running more often is not worth the
-  # Actions minutes on a private repo — see README.
+  # Once a day at 07:00 UTC (09:00 CEST).
   schedule:
     - cron: "0 7 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      test_notification:
+        description: "Send a test notification instead of checking stock"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -30,13 +34,25 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # Proves the NTFY_TOPIC secret matches the topic you are subscribed to,
+      # without waiting for a real restock. Skips the browser install because
+      # it checks nothing.
+      - name: Send test notification
+        if: inputs.test_notification
+        timeout-minutes: 2
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: npm run check -- --test-notification
+
       # No --with-deps: the ubuntu-latest runner already ships the system
       # libraries Chromium needs, and the apt-get step it triggers has hung
       # for hours in the past.
       - name: Install Playwright browsers
+        if: ${{ !inputs.test_notification }}
         run: npx playwright install chromium
 
       - name: Run stock check
+        if: ${{ !inputs.test_notification }}
         timeout-minutes: 5
         env:
           # The ntfy topic is a shared secret: anyone who knows it can read
