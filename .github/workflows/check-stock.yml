@@ -38,6 +38,10 @@ jobs:
 
       - name: Run stock check
         timeout-minutes: 5
+        env:
+          # The ntfy topic is a shared secret: anyone who knows it can read
+          # your notifications and publish fake ones. Kept out of the repo.
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: npm run check
 
       # Runs even when the check step failed, so state for the products that

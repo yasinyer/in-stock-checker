@@ -93,8 +93,29 @@ function isUniqloAvailable(variant, result) {
 
 // ── Shared notification helper ────────────────────────────────────────────────
 
+/**
+ * Resolves the ntfy topic for a product from the environment.
+ *
+ * The topic is a shared secret — anyone who knows it can read your
+ * notifications and publish fake ones — so it is never committed to this
+ * repository. It comes from the NTFY_TOPIC environment variable (a GitHub
+ * Actions secret in CI), or from the variable named by the product's
+ * optional `ntfyTopicEnv` field.
+ */
+function resolveTopic(product) {
+  const varName = product.ntfyTopicEnv ?? "NTFY_TOPIC";
+  const topic = process.env[varName];
+  if (!topic) {
+    throw new Error(
+      `${varName} is not set — cannot send notifications. ` +
+        `Set it as a GitHub Actions secret (or export it locally).`,
+    );
+  }
+  return topic;
+}
+
 async function notify(topic, { title, message, url }) {
-  await fetch(`https://ntfy.sh/${topic}`, {
+  const response = await fetch(`https://ntfy.sh/${topic}`, {
     method: "POST",
     headers: {
       Title: title,
@@ -103,6 +124,12 @@ async function notify(topic, { title, message, url }) {
     },
     body: message,
   });
+
+  // A dropped notification is the one failure that must never pass quietly:
+  // it is the whole point of the checker.
+  if (!response.ok) {
+    throw new Error(`ntfy.sh returned ${response.status} ${response.statusText}`);
+  }
 }
 
 // ── File helpers ──────────────────────────────────────────────────────────────
@@ -122,6 +149,12 @@ async function main() {
   const products = await loadJson(PRODUCTS_FILE, []);
   const state = await loadJson(STATE_FILE, {});
   let failed = 0;
+
+  // Check every topic up front. Otherwise a missing secret only surfaces at
+  // the moment a restock is found — exactly when the notification matters.
+  for (const product of products) {
+    resolveTopic(product);
+  }
 
   for (const product of products) {
     const ok =
@@ -154,12 +187,13 @@ async function handleUniqloProduct(product, state) {
     console.log(`[${product.label ?? product.url}] available=${available}`);
 
     if (available && !wasAvailable) {
-      await notify(product.ntfyTopic, {
+      await notify(resolveTopic(product), {
         title: "Weer op voorraad!",
         message: `${product.label ?? "Product"} is weer op voorraad bij Uniqlo.`,
         url: product.url,
       });
-      console.log(`  -> notification sent to ntfy.sh/${product.ntfyTopic}`);
+      // Don't log the topic itself — CI logs are public on a public repo.
+      console.log("  -> notification sent");
     }
 
     state[key] = { available, checkedAt: new Date().toISOString() };
@@ -186,7 +220,7 @@ async function handleCosProduct(product, state) {
 
     if (newlyAvailable.length > 0) {
       const colorList = newlyAvailable.map((v) => v.name).join(", ");
-      await notify(product.ntfyTopic, {
+      await notify(resolveTopic(product), {
         title: "COS – Weer op voorraad!",
         message:
           `${product.label} — nu beschikbaar in: ${colorList}. ` +
