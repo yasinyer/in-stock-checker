@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { checkCosProduct } from "./check-cos.mjs";
+import { checkUpfrontProduct, formatPrice } from "./check-upfront.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -200,11 +201,14 @@ async function main() {
     return;
   }
 
+  const handlers = {
+    cos: handleCosProduct,
+    upfront: handleUpfrontProduct,
+  };
+
   for (const product of products) {
-    const ok =
-      product.type === "cos"
-        ? await handleCosProduct(product, state)
-        : await handleUniqloProduct(product, state);
+    const handler = handlers[product.type] ?? handleUniqloProduct;
+    const ok = await handler(product, state);
     if (!ok) failed++;
   }
 
@@ -281,6 +285,50 @@ async function handleCosProduct(product, state) {
     return true;
   } catch (error) {
     console.error(`[${product.label}] COS check failed:`, error.message);
+    return false;
+  }
+}
+
+async function handleUpfrontProduct(product, state) {
+  const key = `upfront:${product.label}`;
+  console.log(`[${product.label}] checking prices…`);
+
+  try {
+    const previous = state[key] ?? {};
+    const { discounted, baselines } = await checkUpfrontProduct(
+      product,
+      previous.baselines ?? {},
+    );
+
+    const names = discounted.map((v) => v.name);
+    const previouslyDiscounted = previous.discountedFlavours ?? [];
+
+    // Only flavours that were not already on sale at the last check, so a
+    // multi-day sale notifies once rather than every morning.
+    const newlyDiscounted = discounted.filter(
+      (v) => !previouslyDiscounted.includes(v.name),
+    );
+
+    if (newlyDiscounted.length > 0) {
+      const summary = newlyDiscounted
+        .map((v) => `${v.name} ${formatPrice(v.price)} (was ${formatPrice(v.was)})`)
+        .join(", ");
+      await notify(resolveTopic(product), {
+        title: "Upfront - shake in de aanbieding!",
+        message: `${product.label} is afgeprijsd: ${summary}.`,
+        url: product.productUrl,
+      });
+      console.log(`  -> notification sent for: ${summary}`);
+    }
+
+    state[key] = {
+      discountedFlavours: names,
+      baselines,
+      checkedAt: new Date().toISOString(),
+    };
+    return true;
+  } catch (error) {
+    console.error(`[${product.label}] Upfront check failed:`, error.message);
     return false;
   }
 }
