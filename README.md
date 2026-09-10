@@ -19,6 +19,11 @@ is back in stock.
     bot protection. Every color variant listed in `colorVariants` is visited
     and the target size is available when its size chip does not show
     "Notify me".
+  - **Upfront** entries (`"type": "upfront"`) are checked via
+    `src/check-upfront.mjs`. Upfront runs on Shopify, so `/products/<handle>.js`
+    returns every variant with its availability and price — no browser needed.
+    This watches for a *discount*, not for stock; see
+    [Discount detection](#discount-detection).
 - `state.json` remembers the availability from the last check, so a
   notification is only sent on the transition unavailable -> available
   (not on every run).
@@ -28,9 +33,11 @@ is back in stock.
 
 ## Currently watched
 
-- **COS Slim Ribbed Cotton Tank Top** — size S, in any color except
-  black/grey/white (Navy, Khaki, Blue, Light Mole, Dark Mole, Beige Mélange,
-  Dark Brown).
+- **COS Slim Ribbed Cotton Tank Top** — back in stock in size S, in any color
+  except black/grey/white (Navy, Khaki, Blue, Light Mole, Dark Mole, Beige
+  Mélange, Dark Brown).
+- **Upfront Whey Milkshake** — *discounted* in any flavour. This one watches
+  price, not stock; see below.
 
 ## Notification topic
 
@@ -69,6 +76,28 @@ Locally the same thing:
 ```bash
 NTFY_TOPIC=your-topic npm run check -- --test-notification
 ```
+
+## Discount detection
+
+Shopify's own signal for "on sale" is `compare_at_price > price`, and Upfront
+does use it for genuine sales. Relying on it alone would not be enough here,
+though: the shop also leaves stale values behind. On the Whey Milkshake every
+available flavour sits at a price of 3800 with a `compare_at_price` of 3600 —
+a "was" price *below* the current one, which is not a discount at all. 69 of
+the store's 276 variants are inverted like that.
+
+So a real price cut that leaves `compare_at_price` untouched could stay
+invisible. The checker therefore treats a variant as discounted when it is
+purchasable **and** either:
+
+1. `compare_at_price > price` — a proper sale flag, caught on the first check; or
+2. `price` has dropped below the **baseline** recorded for that variant.
+
+The baseline is the highest price ever seen for a variant, kept in
+`state.json`. It only ever rises, so a sale price never quietly becomes the new
+"normal" and silences the next sale. On the very first run the baseline is
+simply the current price, so no notification fires for prices that were already
+what they are.
 
 ## Add another product to watch
 
