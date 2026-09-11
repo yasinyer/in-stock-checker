@@ -29,6 +29,14 @@
     "sizes": ["L", "XL"]
   },
   {
+    "type": "hm",
+    "label": "H&M Henleyshirt geribd katoen Slim Fit, wit (maat S)",
+    "articleId": "1359341002",
+    "locale": "nl_BE",
+    "sizes": ["S"],
+    "productUrl": "https://www2.hm.com/nl_be/productpage.1359341002.html"
+  },
+  {
     "type": "upfront",
     "label": "Upfront Whey Milkshake (elke smaak)",
     "productJsUrl": "https://upfront.nl/products/whey.js",
