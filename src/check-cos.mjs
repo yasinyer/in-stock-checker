@@ -62,7 +62,24 @@ export async function readSizeChips(page) {
     .catch(() => null);
 
   if (!handle) {
-    throw new Error("no size chips rendered — page blocked or COS markup changed");
+    // Say *why* as far as the page can tell us. "No chips" has two very
+    // different causes — a bot block serving an error page, or COS changing
+    // their markup — and they need opposite fixes, so capture enough of the
+    // page to tell them apart instead of guessing from a bare failure.
+    const diagnosis = await page
+      .evaluate(() => ({
+        url: location.href,
+        title: document.title,
+        text: (document.body?.innerText ?? "").replace(/\s+/g, " ").trim().slice(0, 200),
+      }))
+      .catch(() => null);
+
+    const detail = diagnosis
+      ? `url=${diagnosis.url} title=${JSON.stringify(diagnosis.title)} ` +
+        `body=${JSON.stringify(diagnosis.text)}`
+      : "page could not be inspected";
+
+    throw new Error(`no size chips rendered — ${detail}`);
   }
 
   const chips = await handle.jsonValue();
