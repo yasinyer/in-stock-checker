@@ -10,15 +10,17 @@ is back in stock.
   ntfy topic — see [Notification topic](#notification-topic) below.
 - `src/check-stock.mjs` is the entrypoint that runs all checks:
   - **Uniqlo** entries (no `type` field) are checked via Uniqlo's internal
-    commerce API for the product/color/size combination encoded in the URL's
-    query string (`colorDisplayCode`, `sizeDisplayCode`, `pldDisplayCode`).
-    Items flagged "coming soon" (not yet purchasable, even with warehouse
-    stock) are treated as unavailable.
+    commerce API for the color encoded in the URL's query string
+    (`colorDisplayCode`, plus `pldDisplayCode` where a product has one).
+    Sizes come from a `sizes` list of names — `["L", "XL"]` — and any one of
+    them coming into stock is worth a notification; the names are resolved to
+    the API's opaque display codes at run time. Items flagged "coming soon"
+    (not yet purchasable, even with warehouse stock) count as unavailable.
   - **COS** entries (`"type": "cos"`) are checked via `src/check-cos.mjs`
     using Playwright (headless Chromium), because COS.com sits behind Akamai
     bot protection. Every color variant listed in `colorVariants` is visited
     and the target size is available when its size chip does not show
-    "Notify me".
+    "Notify me". **Currently blocked — see below.**
   - **Upfront** entries (`"type": "upfront"`) are checked via
     `src/check-upfront.mjs`. Upfront runs on Shopify, so `/products/<handle>.js`
     returns every variant with its availability and price — no browser needed.
@@ -37,8 +39,34 @@ is back in stock.
   except black/grey/white (Navy, Khaki, Blue, Light Mole, Dark Mole, Beige
   Mélange, Dark Brown).
 - **COS Long Sleeved Henley Top, Grey Mélange** — back in stock in size S.
+- **Uniqlo Soft Cotton Zip Cardigan, grey** — back in stock in size L or XL.
 - **Upfront Whey Milkshake** — *discounted* in any flavour. This one watches
   price, not stock; see below.
+
+## Known issue: COS blocks the runner
+
+As of 2026-09-11 both COS watches fail. Akamai serves the GitHub Actions
+runner an **"Access Denied"** page instead of the product, so the checker
+reports `no size chips rendered` and the run goes red. This is a bot block on
+the data-centre IP, not a markup change: the error message carries the page
+title and body, and they read `Access Denied … you don't have permission to
+access … on this server`.
+
+The failure is left visible on purpose. Before the parser rewrite, a blocked
+page returned "out of stock", which is indistinguishable from the real thing —
+so the watch could have sat dead for weeks while looking healthy. A red run
+is the honest signal.
+
+Options, none of which the checker can do by itself:
+
+- **Use COS's own "Notify me" button** on the product page. It is the same
+  feature, first-party and sanctioned, and needs no infrastructure.
+- **Run this on a machine with a residential IP** (a home server, a
+  Raspberry Pi) via a self-hosted runner, rather than on GitHub's.
+
+Escalating the evasion — residential proxies, deeper fingerprint spoofing —
+would be working around an access control COS clearly intends, so it is not
+done here.
 
 ## Notification topic
 
@@ -107,9 +135,16 @@ Add an entry to `products.json`. For Uniqlo:
 ```json
 {
   "label": "Readable name for notifications",
-  "url": "https://www.uniqlo.com/<region>/<locale>/products/<id>/<priceGroup>?colorDisplayCode=..&sizeDisplayCode=.."
+  "url": "https://www.uniqlo.com/<region>/<locale>/products/<id>/<priceGroup>?colorDisplayCode=..",
+  "sizes": ["L", "XL"]
 }
 ```
+
+Write `sizes` as the names the site shows, not the URL's `sizeDisplayCode` —
+a code is unreadable and would quietly watch the wrong size if Uniqlo ever
+renumbered them. An unknown name fails the run and lists what the product
+does offer. Omit `sizes` and the single `sizeDisplayCode` from the URL is
+used instead.
 
 For COS, use `"type": "cos"` with a `targetSize` and a `colorVariants` list
 (see the existing entry in `products.json` as a template).
