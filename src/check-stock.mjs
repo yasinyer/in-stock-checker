@@ -69,6 +69,41 @@ async function fetchL2sAndStocks({ region, locale, productId, priceGroup }) {
   return data.result;
 }
 
+/**
+ * Maps human size names to the display codes the l2s endpoint uses.
+ *
+ * The l2s response only carries opaque codes ("003"), so a config written in
+ * codes would be unreadable and would silently watch the wrong size if Uniqlo
+ * ever renumbers. The details endpoint is what names them.
+ */
+async function fetchSizeNames({ region, locale, productId, priceGroup }) {
+  const apiUrl =
+    `https://www.uniqlo.com/${region}/api/commerce/v5/${locale}/products/${productId}` +
+    `/price-groups/${priceGroup}/details?httpFailure=true`;
+
+  const response = await fetch(apiUrl, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": USER_AGENT,
+      "x-fr-clientid": `uq.${region}.web-spa`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Uniqlo details request failed: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const data = await response.json();
+  const sizes = data.result?.sizes;
+  if (!Array.isArray(sizes) || sizes.length === 0) {
+    throw new Error("Uniqlo details response carried no sizes");
+  }
+
+  return new Map(sizes.map((s) => [s.name.toUpperCase(), s.displayCode]));
+}
+
 function findVariant(result, { colorDisplayCode, sizeDisplayCode, pldDisplayCode }) {
   return result.l2s.find((l2) => {
     if (colorDisplayCode && l2.color?.displayCode !== colorDisplayCode) return false;
@@ -223,28 +258,67 @@ async function main() {
   }
 }
 
+/**
+ * Resolves which sizes to watch, as `[{ name, displayCode }]`.
+ *
+ * A product may name the sizes it wants ("L", "XL") — any one of them coming
+ * back in stock is worth a notification. Without that list it falls back to
+ * the single size encoded in the URL's query string.
+ */
+async function resolveTargetSizes(product, params) {
+  if (!product.sizes?.length) {
+    if (!params.sizeDisplayCode) {
+      throw new Error("no sizes configured and none in the URL");
+    }
+    return [{ name: params.sizeDisplayCode, displayCode: params.sizeDisplayCode }];
+  }
+
+  const nameToCode = await fetchSizeNames(params);
+  return product.sizes.map((name) => {
+    const displayCode = nameToCode.get(name.toUpperCase());
+    if (!displayCode) {
+      throw new Error(
+        `size ${name} not offered — available: ${[...nameToCode.keys()].join(", ")}`,
+      );
+    }
+    return { name: name.toUpperCase(), displayCode };
+  });
+}
+
 async function handleUniqloProduct(product, state) {
   const key = product.url;
   try {
     const params = parseProductUrl(product.url);
+    const targets = await resolveTargetSizes(product, params);
     const result = await fetchL2sAndStocks(params);
-    const variant = findVariant(result, params);
-    const available = isUniqloAvailable(variant, result);
-    const wasAvailable = state[key]?.available ?? false;
 
-    console.log(`[${product.label ?? product.url}] available=${available}`);
+    const availableNames = [];
+    for (const { name, displayCode } of targets) {
+      const variant = findVariant(result, { ...params, sizeDisplayCode: displayCode });
+      const available = isUniqloAvailable(variant, result);
+      console.log(`  [Uniqlo] ${name} → ${available ? "IN STOCK" : "out of stock"}`);
+      if (available) availableNames.push(name);
+    }
 
-    if (available && !wasAvailable) {
+    const previous = state[key]?.availableSizes ?? [];
+    const newly = availableNames.filter((name) => !previous.includes(name));
+
+    if (newly.length > 0) {
       await notify(resolveTopic(product), {
         title: "Weer op voorraad!",
-        message: `${product.label ?? "Product"} is weer op voorraad bij Uniqlo.`,
+        message:
+          `${product.label ?? "Product"} is weer op voorraad bij Uniqlo ` +
+          `in maat ${newly.join(" en ")}.`,
         url: product.url,
       });
       // Don't log the topic itself — CI logs are public on a public repo.
-      console.log("  -> notification sent");
+      console.log(`  -> notification sent for: ${newly.join(", ")}`);
     }
 
-    state[key] = { available, checkedAt: new Date().toISOString() };
+    state[key] = {
+      availableSizes: availableNames,
+      checkedAt: new Date().toISOString(),
+    };
     return true;
   } catch (error) {
     console.error(`[${product.label ?? product.url}] check failed:`, error.message);
