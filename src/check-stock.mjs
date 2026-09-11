@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { checkCosProduct } from "./check-cos.mjs";
 import { checkUpfrontProduct, formatPrice } from "./check-upfront.mjs";
+import { checkHmProduct } from "./check-hm.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -239,6 +240,7 @@ async function main() {
   const handlers = {
     cos: handleCosProduct,
     upfront: handleUpfrontProduct,
+    hm: handleHmProduct,
   };
 
   for (const product of products) {
@@ -359,6 +361,37 @@ async function handleCosProduct(product, state) {
     return true;
   } catch (error) {
     console.error(`[${product.label}] COS check failed:`, error.message);
+    return false;
+  }
+}
+
+async function handleHmProduct(product, state) {
+  const key = `hm:${product.articleId}`;
+  console.log(`[${product.label}] checking sizes…`);
+
+  try {
+    const { available } = await checkHmProduct(product);
+    const previous = state[key]?.availableSizes ?? [];
+    const newly = available.filter((name) => !previous.includes(name));
+
+    if (newly.length > 0) {
+      await notify(resolveTopic(product), {
+        title: "Weer op voorraad!",
+        message:
+          `${product.label} is weer op voorraad bij H&M ` +
+          `in maat ${newly.join(" en ")}.`,
+        url: product.productUrl,
+      });
+      console.log(`  -> notification sent for: ${newly.join(", ")}`);
+    }
+
+    state[key] = {
+      availableSizes: available,
+      checkedAt: new Date().toISOString(),
+    };
+    return true;
+  } catch (error) {
+    console.error(`[${product.label}] H&M check failed:`, error.message);
     return false;
   }
 }

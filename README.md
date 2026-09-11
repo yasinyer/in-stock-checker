@@ -1,8 +1,8 @@
 # in-stock-checker
 
-Checks product pages (Uniqlo, COS) for stock availability and sends a free
-push notification (via [ntfy.sh](https://ntfy.sh)) as soon as a watched item
-is back in stock.
+Checks product pages (Uniqlo, COS, H&M, Upfront) for stock availability or a
+discount, and sends a free push notification (via [ntfy.sh](https://ntfy.sh))
+as soon as something changes.
 
 ## How it works
 
@@ -21,6 +21,10 @@ is back in stock.
     bot protection. Every color variant listed in `colorVariants` is visited
     and the target size is available when its size chip does not show
     "Notify me". **Currently blocked — see below.**
+  - **H&M** entries (`"type": "hm"`) are checked via `src/check-hm.mjs`.
+    `www2.hm.com` is behind the same Akamai block as COS, but `api.hm.com` is
+    not: querying its search service with a full article id returns that one
+    product with per-size stock, so no browser is needed.
   - **Upfront** entries (`"type": "upfront"`) are checked via
     `src/check-upfront.mjs`. Upfront runs on Shopify, so `/products/<handle>.js`
     returns every variant with its availability and price — no browser needed.
@@ -40,6 +44,7 @@ is back in stock.
   Mélange, Dark Brown).
 - **COS Long Sleeved Henley Top, Grey Mélange** — back in stock in size S.
 - **Uniqlo Soft Cotton Zip Cardigan, grey** — back in stock in size L or XL.
+- **H&M Ribbed Cotton Henley Slim Fit, white** — back in stock in size S.
 - **Upfront Whey Milkshake** — *discounted* in any flavour. This one watches
   price, not stock; see below.
 
@@ -148,6 +153,12 @@ used instead.
 
 For COS, use `"type": "cos"` with a `targetSize` and a `colorVariants` list
 (see the existing entry in `products.json` as a template).
+
+For H&M, use `"type": "hm"` with the `articleId` from the product URL
+(`productpage.<articleId>.html`), a `locale` such as `nl_BE`, and a `sizes`
+list of names. Note that H&M's product-level `availability.stockState` reads
+"Available" even when the size you want is at stock 0, so only the per-size
+stock is trusted.
 
 All products share the `NTFY_TOPIC` topic. To send one product elsewhere,
 give it an `"ntfyTopicEnv": "SOME_OTHER_VAR"` field and add that secret too.
