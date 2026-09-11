@@ -36,6 +36,7 @@ is back in stock.
 - **COS Slim Ribbed Cotton Tank Top** — back in stock in size S, in any color
   except black/grey/white (Navy, Khaki, Blue, Light Mole, Dark Mole, Beige
   Mélange, Dark Brown).
+- **COS Long Sleeved Henley Top, Grey Mélange** — back in stock in size S.
 - **Upfront Whey Milkshake** — *discounted* in any flavour. This one watches
   price, not stock; see below.
 
@@ -123,6 +124,24 @@ npm install
 npx playwright install --with-deps chromium
 NTFY_TOPIC=your-topic npm run check
 ```
+
+## Tests
+
+```bash
+npm test
+```
+
+`test/size-parsing.test.mjs` drives the COS size parser against representative
+markup in a real Chromium page, so it needs no network — handy, because COS
+blocks most environments that are not a GitHub runner.
+
+That parser decides whether a restock notification ever fires, and it is the
+part most likely to break quietly when COS changes their markup. The tests
+pin down the cases that matter: a purchasable size among sold-out ones, a
+product where *every* size is sold out (the normal state of anything worth
+watching), a nested chip whose "Notify me" marker must not get lost, and a
+page with no sizes at all — which must raise an error rather than masquerade
+as "out of stock". CI runs them before every check.
 
 ## Note on GitHub Actions schedules
 

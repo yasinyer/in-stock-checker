@@ -13,42 +13,93 @@
 import { chromium } from "playwright";
 
 /**
- * Returns true if the given size is available (purchasable) on the product page.
- * Assumes the caller has already navigated to the correct URL.
+ * Reads every size chip on the current product page.
+ *
+ * Returns `[{ label, soldOut }]`. A chip's full text is either just the size
+ * ("S") when it is purchasable, or the size followed by "Notify me" when it
+ * is not.
+ *
+ * Throws rather than returning an empty list when nothing matches. "No size
+ * chips found" means the page did not render, was blocked, or COS changed
+ * their markup — none of which are the same thing as "out of stock", and
+ * reporting them as such would silently park the watch forever.
  */
-async function isSizeAvailable(page, targetSize) {
-  // Wait for size selector to appear (COS renders it as a list/button group).
-  // We look for any element containing the target size text.
-  try {
-    await page.waitForSelector(`text="${targetSize}"`, { timeout: 10_000 });
-  } catch {
-    // Size selector never appeared — treat as unavailable/error.
-    return false;
+export async function readSizeChips(page) {
+  // Poll for the chips themselves rather than waiting on a selector first.
+  // Waiting for a bare size like "S" would time out on a product where every
+  // size is sold out, since each chip then reads "S Notify me" — and that is
+  // the normal case for anything worth watching.
+  const handle = await page
+    .waitForFunction(
+      () => {
+        const SIZE_RE = /^(XXS|XS|S|M|L|XL|XXL|XXXL|\d{1,3})\s*(notify me)?$/i;
+        const normalize = (node) =>
+          (node?.textContent ?? "").replace(/\s+/g, " ").trim();
+
+        const candidates = [];
+        for (const el of document.querySelectorAll(
+          "button, [role='button'], li, label, a",
+        )) {
+          if (SIZE_RE.test(normalize(el))) candidates.push(el);
+        }
+
+        // Keep only the outermost candidates, so "<button>S Notify me</button>"
+        // wins over a bare "<span>S</span>" nested inside it — otherwise the
+        // sold-out marker gets dropped and the size reads as purchasable.
+        const outermost = candidates.filter(
+          (el) => !candidates.some((other) => other !== el && other.contains(el)),
+        );
+
+        const found = outermost.map((el) => {
+          const match = normalize(el).match(SIZE_RE);
+          return { label: match[1].toUpperCase(), soldOut: Boolean(match[2]) };
+        });
+
+        return found.length > 0 ? found : false;
+      },
+      { timeout: 10_000 },
+    )
+    .catch(() => null);
+
+  if (!handle) {
+    throw new Error("no size chips rendered — page blocked or COS markup changed");
   }
 
-  // Collect all interactive elements whose text starts with the target size.
-  // An available size element contains ONLY the size label (e.g. "S").
-  // An out-of-stock one also contains "Notify me".
-  const result = await page.evaluate((size) => {
-    const candidates = Array.from(
-      document.querySelectorAll("button, [role='button'], li, label"),
-    );
-    for (const el of candidates) {
-      const text = el.textContent?.trim() ?? "";
-      // Exact match on size alone → available
-      if (text === size) return true;
-      // Size label immediately followed by other non-"Notify" text could be
-      // a size + stock-count badge; treat as available.
-      if (text.startsWith(size) && !text.toLowerCase().includes("notify")) {
-        // Guard against accidental matches like "S" inside "XS"
-        const rest = text.slice(size.length).trim();
-        if (rest === "" || /^\d+$/.test(rest)) return true;
-      }
-    }
-    return false;
-  }, targetSize);
+  const chips = await handle.jsonValue();
 
-  return result;
+  // One label can appear more than once (desktop and mobile renders). Treat a
+  // size as sold out if any of its chips says so.
+  const byLabel = new Map();
+  for (const chip of chips) {
+    const existing = byLabel.get(chip.label);
+    byLabel.set(chip.label, {
+      label: chip.label,
+      soldOut: existing ? existing.soldOut || chip.soldOut : chip.soldOut,
+    });
+  }
+
+  return [...byLabel.values()];
+}
+
+/**
+ * Returns true if `targetSize` is purchasable, and logs every size it saw so
+ * the run's output shows what the page actually offered.
+ */
+async function isSizeAvailable(page, targetSize) {
+  const chips = await readSizeChips(page);
+  const summary = chips
+    .map((c) => `${c.label}${c.soldOut ? "(x)" : "(ok)"}`)
+    .join(" ");
+
+  const target = chips.find((c) => c.label === targetSize.toUpperCase());
+  if (!target) {
+    throw new Error(
+      `size ${targetSize} not offered here — page lists: ${summary}`,
+    );
+  }
+
+  console.log(`      sizes: ${summary}`);
+  return !target.soldOut;
 }
 
 /**

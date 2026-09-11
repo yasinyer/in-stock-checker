@@ -16,6 +16,14 @@
     ]
   },
   {
+    "type": "cos",
+    "label": "COS Long Sleeved Henley Top, Grey Mélange (maat S)",
+    "targetSize": "S",
+    "colorVariants": [
+      { "name": "Grey Mélange", "url": "https://www.cos.com/en-eu/women/womenswear/tops/longsleevetops/product/long-sleeved-henley-top-grey-mlange-1292722001" }
+    ]
+  },
+  {
     "type": "upfront",
     "label": "Upfront Whey Milkshake (elke smaak)",
     "productJsUrl": "https://upfront.nl/products/whey.js",
