@@ -51,6 +51,13 @@ jobs:
         if: ${{ !inputs.test_notification }}
         run: npx playwright install chromium
 
+      # The size parser decides whether a restock notification ever fires, and
+      # it fails quietly when COS changes their markup. Run its tests first.
+      - name: Run tests
+        if: ${{ !inputs.test_notification }}
+        timeout-minutes: 3
+        run: npm test
+
       - name: Run stock check
         if: ${{ !inputs.test_notification }}
         timeout-minutes: 5
