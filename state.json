@@ -20,14 +20,18 @@
       "54615095247197": 3800,
       "54713380667741": 1000
     },
-    "checkedAt": "2026-09-16T12:35:00.165Z"
+    "checkedAt": "2026-09-17T12:34:41.765Z"
   },
   "https://www.uniqlo.com/be/nl/products/E487005-000/00?colorDisplayCode=03": {
-    "availableSizes": [],
-    "checkedAt": "2026-09-16T12:34:59.309Z"
+    "availableSizes": [
+      "XL"
+    ],
+    "checkedAt": "2026-09-17T12:34:40.979Z"
   },
   "hm:1359341002": {
-    "availableSizes": [],
-    "checkedAt": "2026-09-16T12:34:59.813Z"
+    "availableSizes": [
+      "S"
+    ],
+    "checkedAt": "2026-09-17T12:34:41.436Z"
   }
 }
