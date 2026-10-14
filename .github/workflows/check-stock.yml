@@ -1,9 +1,13 @@
 name: Check stock
 
 on:
-  # Once a day at 07:00 UTC (09:00 CEST).
-  schedule:
-    - cron: "0 7 * * *"
+  # All watches are paused — the daily schedule is switched off on request.
+  # products.json is left intact, so restoring it is just uncommenting this:
+  #
+  #   schedule:
+  #     - cron: "0 7 * * *"   # 07:00 UTC / 09:00 CEST
+  #
+  # Manual runs still work from the Actions tab in the meantime.
   workflow_dispatch:
     inputs:
       test_notification:

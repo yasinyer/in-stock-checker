@@ -33,11 +33,27 @@ as soon as something changes.
 - `state.json` remembers the availability from the last check, so a
   notification is only sent on the transition unavailable -> available
   (not on every run).
-- `.github/workflows/check-stock.yml` runs the check once a day (07:00 UTC)
-  via GitHub Actions and commits the updated `state.json` back to the repo.
-  You can also trigger it on demand from the Actions tab.
+- `.github/workflows/check-stock.yml` used to run the check once a day via
+  GitHub Actions and commit the updated `state.json` back to the repo. **The
+  schedule is currently switched off — see Paused below.** Manual runs from
+  the Actions tab still work.
 
-## Currently watched
+## Paused
+
+All watches are off as of 2026-10-14, on request. The daily schedule is
+commented out in `.github/workflows/check-stock.yml`; nothing runs on its own
+and no notifications are sent.
+
+Nothing else was removed. `products.json` still lists every product, the
+`NTFY_TOPIC` secret is untouched, and `state.json` keeps the last known
+availability, so uncommenting the `schedule:` block is all it takes to pick
+up where this left off. A manual run from the Actions tab works in the
+meantime.
+
+The ntfy subscription on your phone can stay — with nothing publishing to the
+topic it simply goes quiet.
+
+## Watch list (paused)
 
 - **COS Slim Ribbed Cotton Tank Top** — back in stock in size S, in any color
   except black/grey/white (Navy, Khaki, Blue, Light Mole, Dark Mole, Beige
